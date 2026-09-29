@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe Canvas</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        /* Scoreboard */
+        .scoreboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            width: 100%;
+        }
+
+        .score-card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+
+        .score-card.active-x {
+            border-color: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+        }
+
+        .score-card.active-o {
+            border-color: #f43f5e;
+            box-shadow: 0 0 10px rgba(244, 63, 94, 0.2);
+        }
+
+        .score-title {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .score-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        /* Canvas Container */
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            background: #1e293b;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: manipulation;
+        }
+
+        /* Status & Controls */
+        .status {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #cbd5e1;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
+        button {
+            flex: 1;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.secondary {
+            background-color: #334155;
+            color: #f8fafc;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Tic-Tac-Toe</h1>
+
+        <!-- Scoreboard -->
+        <div class="scoreboard">
+            <div class="score-card" id="card-x">
+                <div class="score-title">Player X</div>
+                <div class="score-value" id="score-x">0</div>
+            </div>
+            <div class="score-card" id="card-draw">
+                <div class="score-title">Draws</div>
+                <div class="score-value" id="score-draw">0</div>
+            </div>
+            <div class="score-card" id="card-o">
+                <div class="score-title">Player O</div>
+                <div class="score-value" id="score-o">0</div>
+            </div>
+        </div>
+
+        <!-- Status Message -->
+        <div class="status" id="statusText">Player X's Turn</div>
+
+        <!-- Canvas Game Board -->
+        <div class="canvas-wrapper">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <!-- Buttons -->
+        <div class="btn-group">
+            <button class="secondary" id="resetScoreBtn">Reset Scores</button>
+            <button id="resetBoardBtn">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('statusText');
+        
+        const scoreXEl = document.getElementById('score-x');
+        const scoreOEl = document.getElementById('score-o');
+        const scoreDrawEl = document.getElementById('score-draw');
+        const cardX = document.getElementById('card-x');
+        const cardO = document.getElementById('card-o');
+
+        // High-DPI Canvas scaling for sharp lines on mobile screens
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            ctx.scale(dpr, dpr);
+            drawGame();
+        }
+
+        let board = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayer = 'X';
+        let isGameActive = true;
+        let winningLine = null;
+
+        let scores = {
+            X: 0,
+            O: 0,
+            draw: 0
+        };
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+            [0, 4, 8], [2, 4, 6]            // Diagonals
+        ];
+
+        function updateScoreboardUI() {
+            scoreXEl.textContent = scores.X;
+            scoreOEl.textContent = scores.O;
+            scoreDrawEl.textContent = scores.draw;
+
+            cardX.classList.remove('active-x');
+            cardO.classList.remove('active-o');
+
+            if (isGameActive) {
+                if (currentPlayer === 'X') {
+                    cardX.classList.add('active-x');
+                } else {
+                    cardO.classList.add('active-o');
+                }
+            }
+        }
+
+        function handleCellClick(e) {
+            if (!isGameActive) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            const boxSize = rect.width / 3;
+            const col = Math.floor(x / boxSize);
+            const row = Math.floor(y / boxSize);
+            const index = row * 3 + col;
+
+            if (board[index] === '') {
+                board[index] = currentPlayer;
+                checkResult();
+                if (isGameActive) {
+                    currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                    statusText.textContent = `Player ${currentPlayer}'s Turn`;
+                }
+                updateScoreboardUI();
+                drawGame();
+            }
+        }
+
+        function checkResult() {
+            let roundWon = false;
+            let winningCondition = null;
+
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    roundWon = true;
+                    winningCondition = [a, b, c];
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                scores[currentPlayer]++;
+                isGameActive = false;
+                winningLine = winningCondition;
+                statusText.textContent = `Player ${currentPlayer} Wins! 🎉`;
+                cardX.classList.remove('active-x');
+                cardO.classList.remove('active-o');
+                return;
+            }
+
+            if (!board.includes('')) {
+                scores.draw++;
+                isGameActive = false;
+                statusText.textContent = `It's a Draw!`;
+                cardX.classList.remove('active-x');
+                cardO.classList.remove('active-o');
+                return;
+            }
+        }
+
+        function drawGrid() {
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const height = canvas.height / (window.devicePixelRatio || 1);
+            const step = width / 3;
+
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+
+            // Draw vertical lines
+            for (let i = 1; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(step * i, 15);
+                ctx.lineTo(step * i, height - 15);
+                ctx.stroke();
+            }
+
+            // Draw horizontal lines
+            for (let i = 1; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(15, step * i);
+                ctx.lineTo(width - 15, step * i);
+                ctx.stroke();
+            }
+        }
+
+        function drawX(x, y, size) {
+            const padding = size * 0.25;
+            ctx.strokeStyle = '#38bdf8'; // Soft cyan for X
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+
+            ctx.beginPath();
+            ctx.moveTo(x + padding, y + padding);
+            ctx.lineTo(x + size - padding, y + size - padding);
+            ctx.moveTo(x + size - padding, y + padding);
+            ctx.lineTo(x + padding, y + size - padding);
+            ctx.stroke();
+        }
+
+        function drawO(x, y, size) {
+            const radius = (size / 2) * 0.65;
+            ctx.strokeStyle = '#f43f5e'; // Soft rose/red for O
+            ctx.lineWidth = 8;
+
+            ctx.beginPath();
+            ctx.arc(x + size / 2, y + size / 2, radius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawWinningLine() {
+            if (!winningLine) return;
+
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const step = width / 3;
+            
+            const [a, , c] = winningLine;
+            const startCol = a % 3;
+            const startRow = Math.floor(a / 3);
+            const endCol = c % 3;
+            const endRow = Math.floor(c / 3);
+
+            const startX = startCol * step + step / 2;
+            const startY = startRow * step + step / 2;
+            const endX = endCol * step + step / 2;
+            const endY = endRow * step + step / 2;
+
+            ctx.strokeStyle = '#10b981'; // Emerald Green
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawGrid();
+
+            const width = canvas.width / (window.devicePixelRatio || 1);
+            const step = width / 3;
+
+            // Draw X and O pieces
+            for (let i = 0; i < board.length; i++) {
+                const col = i % 3;
+                const row = Math.floor(i / 3);
+                const x = col * step;
+                const y = row * step;
+
+                if (board[i] === 'X') {
+                    drawX(x, y, step);
+                } else if (board[i] === 'O') {
+                    drawO(x, y, step);
+                }
+            }
+
+            // Draw winning line if game is won
+            if (!isGameActive && winningLine) {
+                drawWinningLine();
+            }
+        }
+
+        function resetBoard() {
+            board = ['', '', '', '', '', '', '', '', ''];
+            isGameActive = true;
+            winningLine = null;
+            currentPlayer = 'X';
+            statusText.textContent = `Player X's Turn`;
+            updateScoreboardUI();
+            drawGame();
+        }
+
+        function resetScores() {
+            scores = { X: 0, O: 0, draw: 0 };
+            resetBoard();
+        }
+
+        // Event Listeners
+        canvas.addEventListener('click', handleCellClick);
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault(); // Prevents emulated mouse events firing on mobile
+            handleCellClick(e);
+        });
+
+        document.getElementById('resetBoardBtn').addEventListener('click', resetBoard);
+        document.getElementById('resetScoreBtn').addEventListener('click', resetScores);
+
+        window.addEventListener('load', () => {
+            resizeCanvas();
+            updateScoreboardUI();
+        });
+        window.addEventListener('resize', resizeCanvas);
+    </script>
+</body>
+</html>
